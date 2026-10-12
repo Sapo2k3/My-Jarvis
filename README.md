@@ -24,15 +24,31 @@ and displays its response.
 
 ## Current Status
 
-Initial project setup.
-The AI model is not connected yet.
+The text-based assistant is operational and connected to a local
+Ollama instance using `qwen2.5-coder:3b`.
 
+Implemented features:
+
+- Text-based interaction.
+- Local AI model integration.
+- Bounded, session-only conversation history.
+- Conversation reset with `/reset`.
+- Multiline input with `/paste`, `/send`, and `/cancel`.
+- Automated tests for the CLI and HTTP client.
+- Read-only analysis of explicitly selected project files with `/file`.
+- File preview and explicit confirmation before model submission.
+- Project-root restrictions, file-type filtering, and size limits.
+- Isolated AI conversations for file analysis.
+- Automated tests for file access restrictions and submission approval.
+
+The assistant does not read project files, modify files, or execute
+generated code.
 ## Roadmap
 
-- [ ] Text interface
-- [ ] AI model integration
-- [ ] Error handling and automated tests
-- [ ] Coding Agent with selected project files as context
+- [x] Text interface
+- [x] AI model integration
+- [x] Error handling and automated tests
+- [x] Coding Agent with selected project files as context
 - [ ] Log analysis and proposed diffs
 - [ ] Voice input and output
 - [ ] Computer Vision

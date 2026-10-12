@@ -1,5 +1,9 @@
 """Text interface for My Jarvis."""
 
+from pathlib import Path
+
+from jarvis.file_analysis import analyze_selected_file
+from jarvis.project_files import ProjectFileReader
 from jarvis.ollama_client import OllamaClient, OllamaError
 
 
@@ -39,11 +43,13 @@ def read_multiline_request() -> str:
 def main() -> None:
     """Run an interactive text session with a local AI model."""
     client = OllamaClient()
+    reader = ProjectFileReader(Path.cwd())
 
     print("Jarvis | Interfaccia testuale")
     print(f"Modello: {client.model}")
     print("Scrivi '/reset' per cancellare la cronologia.")
     print("Scrivi '/paste' per inserire codice o errori su più righe.")
+    print("Scrivi '/file' per analizzare un file del progetto.")
     print("Scrivi 'esci' per terminare.\n")
 
     while True:
@@ -57,6 +63,12 @@ def main() -> None:
             if prompt.lower() == "/reset":
                 client.reset_history()
                 print("Jarvis > Cronologia cancellata.\n")
+                continue
+            
+            if prompt.lower() == "/file":
+                file_client = OllamaClient()
+                response = analyze_selected_file(reader, file_client)
+                print(f"Jarvis > {response}\n")
                 continue
 
             if prompt.lower().startswith("/paste "):
