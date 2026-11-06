@@ -122,5 +122,17 @@ class MainTests(unittest.TestCase):
         self.client.chat.assert_not_called()
         self.assertIn("Inserimento annullato o vuoto.", output)
 
+
+    def test_debug_command_delegates_without_using_main_chat(self):
+        with patch(
+            "jarvis.main.debug_selected_file",
+            return_value="Diagnosi di test.",
+        ) as mock_debug:
+            output = self.run_session(["/debug", "esci"])
+
+        mock_debug.assert_called_once()
+        self.client.chat.assert_not_called()
+        self.assertIn("Diagnosi di test.", output)
+        
 if __name__ == "__main__":
     unittest.main()

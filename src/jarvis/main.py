@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from jarvis.file_analysis import analyze_selected_file
+from jarvis.debug_analysis import debug_selected_file
 from jarvis.project_files import ProjectFileReader
 from jarvis.ollama_client import OllamaClient, OllamaError
 
@@ -50,6 +51,7 @@ def main() -> None:
     print("Scrivi '/reset' per cancellare la cronologia.")
     print("Scrivi '/paste' per inserire codice o errori su più righe.")
     print("Scrivi '/file' per analizzare un file del progetto.")
+    print("Scrivi '/debug' per analizzare un file insieme a un errore.")
     print("Scrivi 'esci' per terminare.\n")
 
     while True:
@@ -71,6 +73,16 @@ def main() -> None:
                 print(f"Jarvis > {response}\n")
                 continue
 
+            if prompt.lower() == "/debug":
+                debug_client = OllamaClient()
+                response = debug_selected_file(
+                    reader,
+                    debug_client,
+                    read_multiline_request
+                )
+                print(f"Jarvis > {response}\n")
+                continue
+                
             if prompt.lower().startswith("/paste "):
                 print(
                     "Jarvis > Scrivi '/paste' da solo e premi Invio, "
