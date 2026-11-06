@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 from jarvis.ollama_client import OllamaClient, OllamaError
 from jarvis.project_files import ProjectFileError, ProjectFileReader
-from jarvis.patch_validation import validate_model_patch
+from jarvis.debug_revision import run_debug_revision
 
 MAX_DEBUG_CHARS = 4000
 
@@ -52,7 +52,10 @@ def debug_selected_file(
     print("Controlla che codice e log non contengano credenziali o dati privati.")
     
     confirmation = input(
-        "Inviare codice e log al modello Ollama locale? [s/N] > "
+        "Inviare codice e log al modello Ollama locale?\n"
+        "Se la patch viene rifiutata, Jarvis potrà effettuare "
+        "un solo secondo invio per richiederne la revisione. "
+        "[s/N] > "
     ).strip().lower()
     
     if confirmation != "s":
@@ -88,24 +91,96 @@ def debug_selected_file(
         "END ERROR LOG"
     )
     
-    print("Jarvis > Analisi di codice ed errore in corso...")
+    print(
+            "Jarvis > Analisi in corso, con al massimo "
+            "una revisione automatica della patch..."
+        )
     
     try:
-        response = client.chat(prompt)
+        result = run_debug_revision(
+            client = client,
+            initial_prompt = prompt,
+            selected_path = relative_path,
+            source = content,
+            error_log = error_log,
+        )
     except OllamaError as error:
         return f"Errore: {error}"
     
-    check = validate_model_patch(
-        response = response,
-        selected_path = relative_path,
-        source = content,
+    sections = [
+        "--- Prima analisi ---",
+        result.first_response,
+        "",
+        "--- Validazione locale: tentativo 1 ---",
+        f"Patch check: {result.first_check.status}",
+        result.first_check.detail,
+    ]
+    
+    if result.second_response is not None:
+        sections.extend(
+            [
+                "",
+                "--- Revisione automatica: tentativo 2 di 2 ---",
+                result.second_response,
+            ]
+        )
+        
+    if result.second_check is not None:
+        sections.extend(
+            [
+                "",
+                "--- Validazione locale: tentativo 2 ---",
+                f"Patch check: {result.second_check.status}",
+                result.second_check.detail,
+            ]
+        )
+        
+    if result.revision_error is not None:
+        sections.extend(
+            [
+                "",
+                "--- Revisione automatica: tentativo 2 di 2 ---",
+                result.revision_error,
+                "La prima analisi e il relativo rifiuto "
+                "restano riportati sopra.",
+            ]
+        )
+    
+    if result.revision_skipped_reason is not None:
+        sections.extend(
+            [
+                "",
+                "--- Revisione automatica non inviata ---",
+                result.revision_skipped_reason,
+            ]
+        )
+        
+    if result.first_check.status == "NO_PATCH":
+        sections.extend(
+            [
+                "",
+                "Nessuna revisione automatica: "
+                "non è stato riconosciuto un blocco diff.",
+            ]
+        )
+    elif result.first_check.status == "CHECK_ERROR":
+        sections.extend(
+            [
+                "",
+                "Nessuna revisione automatica: "
+                "la verifica locale non è stata completata.",
+            ]
+        )
+        
+    sections.extend(
+        [
+            "",
+            "APPLICABLE indica soltanto applicabilità dello snapshot "
+            "analizzato, non correttezza del comportamento, "
+            "sicurezza o superamento dei test.",
+            "Nessun file del progetto è stato modificato.",
+            "Il codice non è stato eseguito.",
+        ]
     )
     
-    return (
-        f"{response}\n\n"
-        "--- Local patch validation ---\n"
-        f"Patch check: {check.status}\n"
-        f"{check.detail}\n"
-        "Nessun file del progetto è stato modificato. "
-        "il codice non è stato eseguito"
-    )
+    return "\n".join(sections)

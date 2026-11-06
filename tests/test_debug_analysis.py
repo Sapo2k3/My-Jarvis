@@ -8,6 +8,8 @@ from unittest.mock import Mock, patch
 from jarvis.debug_analysis import MAX_DEBUG_CHARS, debug_selected_file
 from jarvis.ollama_client import OllamaClient, OllamaError
 from jarvis.project_files import ProjectFileError, ProjectFileReader
+from jarvis.debug_revision import DebugRevisionResult
+from jarvis.patch_validation import PatchCheck
 
 
 class DebugAnalysisTests(unittest.TestCase):
@@ -129,6 +131,108 @@ class DebugAnalysisTests(unittest.TestCase):
             "Errore: Servizio non disponibile.",
         )
 
+    def test_revision_result_is_presented_with_both_checks(self):
+        revision_result = DebugRevisionResult(
+            first_response="Prima proposta.",
+            first_check=PatchCheck(
+                "REJECTED",
+                "Conteggi del diff non validi.",
+            ),
+            second_response="Proposta revisionata.",
+            second_check=PatchCheck(
+                "APPLICABLE",
+                "Diff applicabile allo snapshot.",
+            ),
+        )
 
+        with patch(
+            "jarvis.debug_analysis.run_debug_revision",
+            return_value=revision_result,
+        ) as run_revision:
+            result, _ = self.run_debug(
+                ["examples/division.py", "s"]
+            )
+
+        run_revision.assert_called_once()
+        arguments = run_revision.call_args.kwargs
+
+        self.assertIs(arguments["client"], self.client)
+        self.assertEqual(
+            arguments["selected_path"],
+            "examples/division.py",
+        )
+        self.assertEqual(
+            arguments["source"],
+            self.reader.read.return_value,
+        )
+        self.assertEqual(
+            arguments["error_log"],
+            self.read_multiline.return_value,
+        )
+        self.assertIn(
+            self.reader.read.return_value,
+            arguments["initial_prompt"],
+        )
+        self.assertIn(
+            self.read_multiline.return_value,
+            arguments["initial_prompt"],
+        )
+
+        self.client.chat.assert_not_called()
+        self.assertIn("Prima proposta.", result)
+        self.assertIn("Proposta revisionata.", result)
+        self.assertIn("Patch check: REJECTED", result)
+        self.assertIn("Patch check: APPLICABLE", result)
+        self.assertIn("tentativo 2 di 2", result)
+        self.assertIn(
+            "Nessun file del progetto è stato modificato.",
+            result,
+        )
+        self.assertIn(
+            "Il codice non è stato eseguito.",
+            result,
+        )
+        self.assertEqual(
+            result.count(
+                "--- Revisione automatica: tentativo 2 di 2 ---"
+            ),
+            1,
+        )
+        self.assertEqual(
+            result.count("Proposta revisionata."),
+            1,
+        )
+        self.assertEqual(
+            result.count("--- Validazione locale: tentativo 2 ---"),
+            1,
+        )
+
+    def test_confirmation_mentions_revision_and_cancel_skips_orchestration(self):
+        output = StringIO()
+
+        with patch(
+            "jarvis.debug_analysis.run_debug_revision"
+        ) as run_revision:
+            with patch(
+                "builtins.input",
+                side_effect=["examples/division.py", ""],
+            ) as input_mock:
+                with redirect_stdout(output):
+                    result = debug_selected_file(
+                        self.reader,
+                        self.client,
+                        self.read_multiline,
+                    )
+
+        confirmation_prompt = input_mock.call_args_list[1].args[0]
+
+        self.assertIn(
+            "un solo secondo invio",
+            confirmation_prompt,
+        )
+        run_revision.assert_not_called()
+        self.client.chat.assert_not_called()
+        self.assertIn("annullato", result)
+    
 if __name__ == "__main__":
     unittest.main()
